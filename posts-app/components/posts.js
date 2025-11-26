@@ -1,0 +1,83 @@
+"use client";
+
+import { formatDate } from "@/lib/format";
+import LikeButton from "./like-icon";
+import { togglePostLikeStatus } from "@/actions/posts-actions";
+import { useOptimistic } from "react";
+
+function Post({ post, action }) {
+  return (
+    <article className="post">
+      <div className="post-image">
+        <img src={post.image} alt={post.title} />
+      </div>
+      <div className="post-content">
+        <header>
+          <div>
+            <h2>{post.title}</h2>
+            <p>
+              Shared by {post.userFirstName} on{" "}
+              <time dateTime={post.createdAt}>
+                {formatDate(post.createdAt)}
+              </time>
+            </p>
+          </div>
+          <div>
+            <form
+              action={action.bind(null, post.id)}
+              className={post.isLiked ? "liked" : ""}
+            >
+              <LikeButton />
+            </form>
+          </div>
+        </header>
+        <p>{post.content}</p>
+      </div>
+    </article>
+  );
+}
+
+export default function Posts({ posts }) {
+  const [optimisticPosts, updateOptimisticPosts] = useOptimistic(
+    posts,
+    () => (prevState, updatedPostId) => {
+      const updatedPostIndex = prevState.findIndex(
+        (post) => post.id === updatedPostId
+      );
+
+      if (updatedPostIndex === -1) return prevState;
+
+      const updatedPost = { ...prevState[updatedPostIndex] };
+      // Check wheter is already favorite or not
+      updatedPost.likes = updatedPost.likes + (updatedPost.isLiked ? -1 : 1);
+      updatedPost.isLiked = !updatedPost.isLiked;
+      const newPosts = [...prevState];
+      newPosts[updatedPostIndex] = updatedPost;
+      return newPosts;
+    }
+  );
+  if (
+    !optimisticPosts ||
+    optimisticPosts.lenght ||
+    !posts ||
+    posts.length === 0
+  ) {
+    return <p>There are no posts yet. Maybe start sharing some?</p>;
+  }
+
+  // The async keyword allow us tu use a server action without specify with "use server"
+  async function updatePost(postId) {
+    updateOptimisticPosts(postId);
+    await togglePostLikeStatus(postId);
+  }
+
+  return (
+    <ul className="posts">
+      {posts.map((post) => (
+        <li key={post.id}>
+          <Post post={post} action={updatePost} />
+        </li>
+      ))}
+    </ul>
+  );
+}
